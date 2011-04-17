@@ -18,32 +18,30 @@ static inline int iswhite(int c)
 
 static char *xml_emit_entity(char *a)
 {
+	int c;
 	char *b;
-	if (a[1] == '#' && a[2] == 'x') {
-		int c = strtol(a + 3, &b, 16);
-		putchar(c);
-		if (*b == ';')
+	if (a[1] == '#') {
+		if (a[2] == 'x')
+			c = strtol(a + 3, &b, 16);
+		else
+			c = strtol(a + 2, &b, 10);
+		if (*b == ';') {
+			putchar(c);
 			return b + 1;
-		putchar(*a++);
-		return a;
-	}
-	if (a[1] == 'l' && a[2] == 't' && a[3] == ';') {
+		}
+	} else if (a[1] == 'l' && a[2] == 't' && a[3] == ';') {
 		putchar('<');
 		return a + 4;
-	}
-	if (a[1] == 'g' && a[2] == 't' && a[3] == ';') {
+	} else if (a[1] == 'g' && a[2] == 't' && a[3] == ';') {
 		putchar('>');
 		return a + 4;
-	}
-	if (a[1] == 'a' && a[2] == 'm' && a[3] == 'p' && a[4] == ';') {
+	} else if (a[1] == 'a' && a[2] == 'm' && a[3] == 'p' && a[4] == ';') {
 		putchar('&');
 		return a + 5;
-	}
-	if (a[1] == 'a' && a[2] == 'p' && a[3] == 'o' && a[4] == 's' && a[5] == ';') {
+	} else if (a[1] == 'a' && a[2] == 'p' && a[3] == 'o' && a[4] == 's' && a[5] == ';') {
 		putchar('\'');
 		return a + 6;
-	}
-	if (a[1] == 'q' && a[2] == 'u' && a[3] == 'o' && a[4] == 't' && a[5] == ';') {
+	} else if (a[1] == 'q' && a[2] == 'u' && a[3] == 'o' && a[4] == 't' && a[5] == ';') {
 		putchar('"');
 		return a + 6;
 	}
