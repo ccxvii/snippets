@@ -493,7 +493,7 @@ void readcmap8(FILE *f)
 	printf("\tformat = 8\n");
 	printf("\tlanguage = %lu\n", language);
 
-	printf("    ngroups %lu\n", ngroups);
+	printf("\tngroups %lu\n", ngroups);
 
 	for (i = 0; i < ngroups; i++)
 	{
@@ -545,13 +545,14 @@ void readcmap12(FILE *f)
 	printf("\tformat = 12\n");
 	printf("\tlanguage = %lu\n", language);
 
-	printf("    ngroups %lu\n", ngroups);
+	printf("\tngroups %lu\n", ngroups);
 
 	for (i = 0; i < ngroups; i++)
 	{
 		startchar = readulong(f);
 		endchar = readulong(f);
 		startglyph = readulong(f);
+		printf("\t\t<%lx> <%lx> %lu\n", startchar, endchar, startglyph);
 	}
 }
 
