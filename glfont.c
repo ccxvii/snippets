@@ -220,6 +220,7 @@ static struct glyph * lookup_glyph(FT_Face face, int size, int gid, int subx, in
 	{
 		g_cache_row_y += g_cache_row_h + PADDING;
 		g_cache_row_x = PADDING;
+		g_cache_row_h = 0;
 	}
 	if (g_cache_row_y + h + PADDING > g_cache_h)
 	{
