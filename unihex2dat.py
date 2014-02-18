@@ -41,10 +41,36 @@ print len(udata), "bytes of uncompressed glyph data"
 print len(cdata), "bytes of compressed glyph data"
 
 f = open("unifont.dat", "wb")
-f.write(struct.pack(">iii", len(table), len(cdata), len(udata)))
+f.write(struct.pack(">III", len(table), len(cdata), len(udata)))
 for low, high, w, ofs in table:
-	print '\t%x %x %d %d' % (low, high, w, ofs)
-	f.write(struct.pack(">iiii", low, high, w, ofs))
+	print '\t%x %x (%d) %d %d' % (low, high, high - low + 1, w, ofs)
+	f.write(struct.pack(">HHBI", low, high, w, ofs))
 f.write(cdata)
 f.close()
 
+f = open("unifont.h", "w")
+print >>f, "#define unifont_count %d" % len(table)
+print >>f, "static const unsigned short unifont_low[%d] = {" % len(table)
+for low, high, w, ofs in table: print >>f, "%d," % low
+print >>f, "}"
+print >>f, "static const unsigned short unifont_high[%d] = {" % len(table)
+for low, high, w, ofs in table: print >>f, "%d," % high
+print >>f, "}"
+print >>f, "static const unsigned char unifont_width[%d] = {" % len(table)
+for low, high, w, ofs in table: print >>f, "%d," % w
+print >>f, "}"
+print >>f, "static const unsigned int unifont_offset[%d] = {" % len(table)
+for low, high, w, ofs in table: print >>f, "%d," % ofs
+print >>f, "}"
+print >>f, "static const unsigned char unifont_data[%d] = {" % len(udata)
+i = 0
+s = "\t"
+for x in udata:
+	if i == 7:
+		print >>f, s
+		s = "\t"
+		i = 0
+	else:
+		s = s + ("0x%02x," % ord(x))
+		i = i + 1
+print >>f, "}"
