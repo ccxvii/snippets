@@ -300,10 +300,10 @@ float measure_string(FT_Face face, float fsize, char *str)
 	{
 		str += chartorune(&ucs, str);
 		gid = FT_Get_Char_Index(face, ucs);
-		FT_Get_Advance(face, gid, FT_LOAD_NO_BITMAP | FT_LOAD_NO_HINTING, &advance);
-		w += advance / 65536.0;
 		FT_Get_Kerning(face, left, gid, FT_KERNING_UNFITTED, &kern);
 		w += kern.x / 64.0;
+		FT_Get_Advance(face, gid, FT_LOAD_NO_BITMAP | FT_LOAD_NO_HINTING, &advance);
+		w += advance / 65536.0;
 		left = gid;
 	}
 
@@ -326,9 +326,9 @@ float draw_string(FT_Face face, float fsize, float x, float y, char *str)
 	{
 		str += chartorune(&ucs, str);
 		gid = FT_Get_Char_Index(face, ucs);
-		x += draw_glyph(face, size, gid, x, y);
 		FT_Get_Kerning(face, left, gid, FT_KERNING_UNFITTED, &kern);
 		x += kern.x / 64.0;
+		x += draw_glyph(face, size, gid, x, y);
 		left = gid;
 	}
 
