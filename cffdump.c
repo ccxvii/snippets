@@ -143,7 +143,7 @@ static int readinteger(FILE *f, int b0)
     {
         b1 = read8(f);
         b2 = read8(f);
-        return (b1 << 8) | b2;
+        return (short)((b1 << 8) | b2);
     }
 
     if (b0 == 29)
@@ -292,7 +292,7 @@ static void readdict(FILE *f, char *dictname, int idx, int sofs, int eofs, int i
                 if (x[i].type == INTEGER)
                     printf("%d ", x[i].ival);
                 if (x[i].type == REAL)
-                    printf("%g ", x[i].rval);
+                    printf("%0.9g ", x[i].rval);
             }
 
             printf("\n");
