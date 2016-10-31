@@ -169,7 +169,7 @@ static int lexcount(void)
 		g.yymin = g.yymin * 10 + dec(g.yychar);
 		g.yychar = *g.source++;
 	}
-	if (g.yymin >= REPINF)
+	if (g.yymin < 0 || g.yymin >= REPINF)
 		die("numeric overflow");
 
 	if (g.yychar == ',') {
@@ -183,7 +183,7 @@ static int lexcount(void)
 				g.yymax = g.yymax * 10 + dec(g.yychar);
 				g.yychar = *g.source++;
 			}
-			if (g.yymax >= REPINF)
+			if (g.yymax < 0 || g.yymax >= REPINF)
 				die("numeric overflow");
 		}
 	} else {
