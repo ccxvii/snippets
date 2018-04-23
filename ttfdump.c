@@ -19,6 +19,7 @@
 
 static int g_nglyphs;
 static int g_locafmt;
+static int g_indent;
 
 void panic(char *fmt, ...)
 {
@@ -64,6 +65,39 @@ static inline ulong readulong(FILE *f)
 	return (a << 24) | (b << 16) | (c << 8) | d;
 }
 
+static void indent(int level, const char *fmt, ...)
+{
+	va_list args;
+	int i;
+
+	va_start(args, fmt);
+	for (i = 0; i < g_indent + level; i++)
+		putchar('\t');
+	vprintf(fmt, args);
+	va_end(args);
+}
+
+static void indentdump(int level, int offset, int max, const char *fmt, ...)
+{
+
+	va_list args;
+	int i;
+
+	if (offset % max)
+		level = 0;
+	if (level > 0)
+		level += g_indent;
+	for (i = 0; i < level; i++)
+		putchar('\t');
+	if (fmt) {
+		va_start(args, fmt);
+		vprintf(fmt, args);
+		va_end(args);
+	}
+	putchar(offset % max == max - 1 ? '\n' : ' ');
+}
+
+
 /*
  * OpenType tables
  */
@@ -77,13 +111,13 @@ void readlangtable(FILE *f, ulong langofs)
 	ushort featurecount = readushort(f);
 
 	if (reqfeatidx != 0xFFFF)
-		printf("req %u ", reqfeatidx);
+		indent(0, "req %u ", reqfeatidx);
 
 	int i;
 	for (i = 0; i < featurecount; i++)
 	{
 		ushort featidx = readushort(f);
-		printf("%u ", featidx);
+		indent(0, "%u ", featidx);
 	}
 }
 
@@ -106,7 +140,8 @@ void readscriptlist(FILE *f, ulong scriptlistofs)
 
 	for (i = 0; i < scriptcount; i++)
 	{
-		printf("    script %4.4s\n    {\n", scripttag[i]);
+		indent(1, "script %4.4s\n", scripttag[i]);
+		indent(1, "{\n");
 
 		fseek(f, scriptlistofs + scriptofs[i], 0);
 
@@ -121,18 +156,18 @@ void readscriptlist(FILE *f, ulong scriptlistofs)
 		}
 
 		if (defofs) {
-			printf("\tlang default [ ");
+			indent(2, "lang default [ ");
 			readlangtable(f, scriptlistofs + scriptofs[i] + defofs);
-			printf("]\n");
+			puts("]");
 		}
 
 		for (k = 0; k < langcount; k++) {
-			printf("\tlang %4.4s [ ", langtag[k]);
+			indent(2, "lang %4.4s [ ", langtag[k]);
 			readlangtable(f, scriptlistofs + scriptofs[i] + langofs[k]);
-			printf("]\n");
+			puts("]");
 		}
 
-		printf("    }\n");
+		indent(1, "}\n");
 	}
 }
 
@@ -163,7 +198,7 @@ void readfeaturelist(FILE *f, ulong featlistofs)
 		fread(tag, 1, 4, f);
 		ulong featofs = readushort(f);
 		ulong tmpofs = ftell(f);
-		printf("    feat %4.4s [ ", tag);
+		indent(1, "feat %4.4s [ ", tag);
 		readfeature(f, featlistofs + featofs);
 		printf("] %% %d\n", i);
 		fseek(f, tmpofs, 0);
@@ -177,7 +212,7 @@ void readlookup(FILE *f, ulong lookupofs, int what)
 	fseek(f, lookupofs, 0);
 
 	ushort type = readushort(f);
-	printf("\ttype = ");
+	indent(2, "type = ");
 	if (what == GPOS)
 	{
 		switch (type)
@@ -212,16 +247,16 @@ void readlookup(FILE *f, ulong lookupofs, int what)
 	else printf("%u\n", type);
 
 	ushort flag = readushort(f);
-	printf("\tflag = [ ");
+	indent(2, "flag = [ ");
 	if (flag & 0x0001) printf("RTL ");
 	if (flag & 0x0002) printf("IgnBase ");
 	if (flag & 0x0004) printf("IgnLiga ");
 	if (flag & 0x0008) printf("IgnMark ");
 	if (flag & 0xFF00) printf("MarkAttType ");
-	printf("]\n");
+	puts("]");
 
 	ushort subcount = readushort(f);
-	printf("\tsubtables (%d)\n", subcount);
+	indent(2, "subtables (%d)\n", subcount);
 }
 
 void readlookuplist(FILE *f, ulong lookuplistofs, int what)
@@ -237,9 +272,10 @@ void readlookuplist(FILE *f, ulong lookuplistofs, int what)
 		lookup[i] = readushort(f);
 	for (i = 0; i < count; i++)
 	{
-		printf("    look %d\n    {\n", i);
+		indent(1, "look %d\n", i);
+		indent(1, "{\n");
 		readlookup(f, lookuplistofs + lookup[i], what);
-		printf("    }\n\n");
+		indent(1, "}\n\n");
 	}
 }
 
@@ -252,15 +288,16 @@ void readGSUB(FILE *f, ulong ofs)
 	ushort featurelist = readushort(f);
 	ushort lookuplist = readushort(f);
 
-	printf("GSUB\n{\n");
+	indent(0, "GSUB\n");
+	indent(0, "{\n");
 
 	readscriptlist(f, ofs + scriptlist);
-	printf("\n");
+	indent(0, "\n");
 	readfeaturelist(f, ofs + featurelist);
-	printf("\n");
+	indent(0, "\n");
 	readlookuplist(f, ofs + lookuplist, GSUB);
 
-	printf("}\n\n");
+	indent(0, "}\n\n");
 }
 
 void readGPOS(FILE *f, ulong ofs)
@@ -272,15 +309,16 @@ void readGPOS(FILE *f, ulong ofs)
 	ushort featurelist = readushort(f);
 	ushort lookuplist = readushort(f);
 
-	printf("GPOS\n{\n");
+	indent(0, "GPOS\n");
+	indent(0, "{\n");
 
 	readscriptlist(f, ofs + scriptlist);
-	printf("\n");
+	indent(0, "\n");
 	readfeaturelist(f, ofs + featurelist);
-	printf("\n");
+	indent(0, "\n");
 	readlookuplist(f, ofs + lookuplist, GPOS);
 
-	printf("}\n\n");
+	indent(0, "}\n\n");
 }
 
 /*
@@ -297,19 +335,18 @@ void readcmap0(FILE *f)
 	length = readushort(f);
 	language = readushort(f);
 
-	printf("\tformat = 0\n");
-	printf("\tlanguage = %u\n", language);
-	printf("\tgids = [\n");
+	indent(2, "format = 0\n");
+	indent(2, "language = %u\n", language);
+	indent(2, "gids = [\n");
 
 	for (i = 0; i < 256; i++)
 	{
 		byte gid = getc(f);
-		if (i % 16 == 0) printf("\t  ");
-		printf("%02x", gid);
-		putchar(i % 16 == 15 ? '\n' : ' ');
+		indentdump(3, i, 16, "%02x", gid);
 	}
+	indentdump(0, i, 16, NULL);
 
-	printf("\t]\n");
+	indent(2, "]\n");
 }
 
 void readcmap2(FILE *f)
@@ -325,9 +362,9 @@ void readcmap2(FILE *f)
 	length = readushort(f);
 	language = readushort(f);
 
-	printf("\tformat = 2\n");
-	printf("\tlanguage = %u\n", language);
-	printf("\tsubheadkeys = [\n");
+	indent(2, "format = 2\n");
+	indent(2, "language = %u\n", language);
+	indent(2, "subheadkeys = [\n");
 
 	nsubheaders = 0;
 	for (i = 0; i < 256; i++) {
@@ -335,15 +372,14 @@ void readcmap2(FILE *f)
 		subheadkeys[i] = key;
 		if (nsubheaders < key)
 			nsubheaders = key;
-		if (i % 16 == 0) printf("\t  ");
-		printf("%u", key);
-		putchar(i % 16 == 15 ? '\n' : ' ');
+		indentdump(3, i, 16, "%u", key);
 	}
-	printf("\t]\n");
+	indentdump(0, i, 16, NULL);
+	indent(2, "]\n");
 
 	ngids = (length / 2) - ((256 + 3) + nsubheaders * 4);
 
-	printf("\tsubhead = [\n");
+	indent(2, "subhead = [\n");
 
 	for (i = 0; i < nsubheaders; i++)
 	{
@@ -351,24 +387,22 @@ void readcmap2(FILE *f)
 		ushort count = readushort(f);
 		short delta = readshort(f);
 		ushort rangeofs = readushort(f) - (nsubheaders - i) * 8 - 2;
-		printf("\t  <%04x> %5u %6d %5u\n",
+		indent(3, "<%04x> %5u %6d %5u\n",
 				first, count, delta, rangeofs);
 	}
 
-	printf("\t]\n");
+	indent(2, "]\n");
 
 	if (ngids)
 	{
-		printf("\tgids = [\n");
+		indent(2, "gids = [\n");
 		for (i = 0; i < ngids; i++)
 		{
 			ushort gid = readushort(f);
-			if (i % 12 == 0) printf("\t  ");
-			printf("%04x", gid);
-			putchar(i % 12 == 11 ? '\n' : ' ');
+			indentdump(3, i, 12, "%04x", gid);
 		}
-		if (i % 12 != 0) putchar('\n');
-		printf("\t]\n");
+		indentdump(0, i, 12, NULL);
+		indent(2, "]\n");
 	}
 }
 
@@ -391,8 +425,8 @@ void readcmap4(FILE *f)
 
 	segcount = segcountx2 / 2;
 
-	printf("\tformat = 4\n");
-	printf("\tlanguage = %u\n", language);
+	indent(2, "format = 4\n");
+	indent(2, "language = %u\n", language);
 
 	ushort endcode[segcount];
 	ushort startcode[segcount];
@@ -411,28 +445,26 @@ void readcmap4(FILE *f)
 	for (i = 0; i < segcount; i++)
 		idrangeofs[i] = readushort(f);
 
-	printf("\tranges = [\n");
+	indent(2, "ranges = [\n");
 
 	for (i = 0; i < segcount; i++) {
-		printf("\t  <%04x> <%04x> %6d %5u\n",
+		indent(3, "<%04x> <%04x> %6d %5u\n",
 				startcode[i], endcode[i], iddelta[i], idrangeofs[i]);
 	}
 
-	printf("\t]\n");
+	indent(2, "]\n");
 
 	ushort gidlen = length - (4 * segcount * 2 + 16);
 	if (gidlen)
 	{
-		printf("\tgids = [\n");
+		indent(2, "gids = [\n");
 		for (i = 0; i < gidlen; i++)
 		{
 			ushort gid = readushort(f);
-			if (i % 12 == 0) printf("\t  ");
-			printf("%04x", gid);
-			putchar(i % 12 == 11 ? '\n' : ' ');
+			indentdump(3, i, 12, "%04x", gid);
 		}
-		if (i % 12 != 0) putchar('\n');
-		printf("\t]\n");
+		indentdump(0, i, 12, NULL);
+		indent(2, "]\n");
 	}
 }
 
@@ -448,27 +480,25 @@ void readcmap6(FILE *f)
 	length = readushort(f);
 	language = readushort(f);
 
-	printf("\tformat = 6\n");
-	printf("\tlanguage = %u\n", language);
+	indent(2, "format = 6\n");
+	indent(2, "language = %u\n", language);
 
 	first = readushort(f);
 	count = readushort(f);
 
-	printf("\tfirst = <%04x>\n", first);
-	printf("\tgids = [\n");
+	indent(2, "first = <%04x>\n", first);
+	indent(2, "gids = [\n");
 
 	for (i = 0; i < count; i++)
 	{
-		printf("\tgids = [\n");
+		indent(2, "gids = [\n");
 		for (i = 0; i < count; i++)
 		{
 			ushort gid = readushort(f);
-			if (i % 12 == 0) printf("\t  ");
-			printf("%04x", gid);
-			putchar(i % 12 == 11 ? '\n' : ' ');
+			indentdump(3, i, 12, "%04x", gid);
 		}
-		if (i % 12 != 0) putchar('\n');
-		printf("\t]\n");
+		indentdump(0, i, 12, NULL);
+		indent(2, "]\n");
 	}
 }
 
@@ -490,10 +520,10 @@ void readcmap8(FILE *f)
 	fread(is32, 1, 65536 / 8, f);
 	ngroups = readulong(f);
 
-	printf("\tformat = 8\n");
-	printf("\tlanguage = %lu\n", language);
+	indent(2, "format = 8\n");
+	indent(2, "language = %lu\n", language);
 
-	printf("\tngroups %lu\n", ngroups);
+	indent(2, "ngroups %lu\n", ngroups);
 
 	for (i = 0; i < ngroups; i++)
 	{
@@ -517,8 +547,8 @@ void readcmap10(FILE *f)
 	startchar = readulong(f);
 	count = readulong(f);
 
-	printf("\tformat = 10\n");
-	printf("\tlanguage = %lu\n", language);
+	indent(2, "format = 10\n");
+	indent(2, "language = %lu\n", language);
 
 	for (i = 0; i < count; i++)
 	{
@@ -542,17 +572,17 @@ void readcmap12(FILE *f)
 	language = readulong(f);
 	ngroups = readulong(f);
 
-	printf("\tformat = 12\n");
-	printf("\tlanguage = %lu\n", language);
+	indent(2, "format = 12\n");
+	indent(2, "language = %lu\n", language);
 
-	printf("\tngroups %lu\n", ngroups);
+	indent(2, "ngroups %lu\n", ngroups);
 
 	for (i = 0; i < ngroups; i++)
 	{
 		startchar = readulong(f);
 		endchar = readulong(f);
 		startglyph = readulong(f);
-		printf("\t\t<%lx> <%lx> %lu\n", startchar, endchar, startglyph);
+		indent(3, "<%lx> <%lx> %lu\n", startchar, endchar, startglyph);
 	}
 }
 
@@ -569,7 +599,7 @@ void readcmap(FILE *f, ulong cmapofs)
 	fseek(f, cmapofs, 0);
 
 	version = readushort(f);
-	printf("cmap\n{\n");
+	indent(0, "cmap\n{\n");
 
 	nsubtables = readushort(f);
 
@@ -586,8 +616,8 @@ void readcmap(FILE *f, ulong cmapofs)
 
 	for (i = 0; i < nsubtables; i++)
 	{
-		printf("    platform %u encoding %u\n", pids[i], eids[i]);
-		printf("    {\n");
+		indent(1, "platform %u encoding %u\n", pids[i], eids[i]);
+		indent(1, "{\n");
 
 		fseek(f, cmapofs + offsets[i], 0);
 
@@ -609,10 +639,10 @@ void readcmap(FILE *f, ulong cmapofs)
 		default: panic("unknown cmap format: %u\n", format);
 		}
 
-		printf("    }\n\n");
+		indent(1, "}\n\n");
 	}
 
-	printf("}\n\n");
+	indent(0, "}\n\n");
 }
 
 /*
@@ -657,12 +687,13 @@ void readhead(FILE *f, ulong headofs)
 	if (magicnumber != 0x5F0F3CF5)
 		panic("bad voodoo: 0x%08x\n", magicnumber);
 
-	printf("head\n{\n");
+	indent(0, "head\n");
+	indent(0, "{\n");
 
-	printf("    font-revision = 0x%08lx\n", fontrevision);
-	printf("    units-per-em = %u\n", unitsperem);
+	indent(1, "font-revision = 0x%08lx\n", fontrevision);
+	indent(1, "units-per-em = %u\n", unitsperem);
 
-	printf("    bidi = ");
+	indent(1, "bidi = ");
 	if (fontdirhint == 0) puts("fully-mixed-directional-glyphs");
 	else if (fontdirhint == 1) puts("strongly-ltr");
 	else if (fontdirhint == 2) puts("ltr-with-neutrals");
@@ -670,39 +701,39 @@ void readhead(FILE *f, ulong headofs)
 	else if (fontdirhint == -2) puts("rtl-with-neutrals");
 	else puts("unknown");
 
-	printf("    style = [ ");
-	if (macstyle & 0x0001) printf("bold ");
-	if (macstyle & 0x0002) printf("italic ");
-	if (macstyle & 0x0004) printf("underline ");
-	if (macstyle & 0x0008) printf("outline ");
-	if (macstyle & 0x0010) printf("shadow ");
-	if (macstyle & 0x0020) printf("condensed ");
-	if (macstyle & 0x0040) printf("extended ");
-	printf("]\n");
+	indent(1, "style = [ ");
+	if (macstyle & 0x0001) indent(0, "bold ");
+	if (macstyle & 0x0002) indent(0, "italic ");
+	if (macstyle & 0x0004) indent(0, "underline ");
+	if (macstyle & 0x0008) indent(0, "outline ");
+	if (macstyle & 0x0010) indent(0, "shadow ");
+	if (macstyle & 0x0020) indent(0, "condensed ");
+	if (macstyle & 0x0040) indent(0, "extended ");
+	indent(0, "]\n");
 
-	printf("    flags = [\n");
-	if (flags & 0x0001) puts("\tbaseline at y=0");
-	if (flags & 0x0002) puts("\txmin is lsb");
-	if (flags & 0x0004) puts("\tinstructions may depend on point size");
-	if (flags & 0x0008) puts("\tuse integer scaling instead of fractional");
-	if (flags & 0x0010) puts("\tinstructions may alter advance width");
+	indent(1, "flags = [\n");
+	if (flags & 0x0001) indent(2, "baseline at y=0\n");
+	if (flags & 0x0002) indent(2, "xmin is lsb\n");
+	if (flags & 0x0004) indent(2, "instructions may depend on point size\n");
+	if (flags & 0x0008) indent(2, "use integer scaling instead of fractional\n");
+	if (flags & 0x0010) indent(2, "instructions may alter advance width\n");
 
 	/* apple flags */
-	if (flags & 0x0020) puts("\tapple: vertical baseline x=0");
-	if (flags & 0x0080) puts("\tapple: requires layout");
-	if (flags & 0x0100) puts("\tapple: has gx morph effects by default");
-	if (flags & 0x0200) puts("\tapple: has strong rtl glyphs");
-	if (flags & 0x0400) puts("\tapple: has indic rearrangement");
+	if (flags & 0x0020) indent(2, "apple: vertical baseline x=0\n");
+	if (flags & 0x0080) indent(2, "apple: requires layout\n");
+	if (flags & 0x0100) indent(2, "apple: has gx morph effects by default\n");
+	if (flags & 0x0200) indent(2, "apple: has strong rtl glyphs\n");
+	if (flags & 0x0400) indent(2, "apple: has indic rearrangement\n");
 
 	/* adobe flags */
-	if (flags & 0x0800) puts("\tadobe: lossless fontdata");
-	if (flags & 0x1000) puts("\tadobe: converted font");
-	if (flags & 0x2000) puts("\tadobe: optimised for cleartype");
-	printf("    ]\n");
+	if (flags & 0x0800) indent(2, "adobe: lossless fontdata\n");
+	if (flags & 0x1000) indent(2, "adobe: converted font\n");
+	if (flags & 0x2000) indent(2, "adobe: optimised for cleartype\n");
+	indent(1, "]\n");
 
-	printf("    locaformat = %s\n", indextolocfmt == 0 ? "short" : "long");
+	indent(1, "locaformat = %s\n", indextolocfmt == 0 ? "short" : "long");
 
-	printf("}\n\n");
+	indent(0, "}\n\n");
 
 	g_locafmt = indextolocfmt;
 }
@@ -719,12 +750,13 @@ void readmaxp(FILE *f, ulong maxpofs)
 
 	fseek(f, maxpofs, 0);
 
-	printf("maxp\n{\n");
+	indent(0, "maxp\n");
+	indent(0, "{\n");
 
 	version = readulong(f);
 	if (version == 0x00005000) {
 		nglyphs = readushort(f);
-		printf("    numglyphs = %u\n", nglyphs);
+		indent(1, "numglyphs = %u\n", nglyphs);
 	}
 	else if (version == 0x00010000) {
 		nglyphs = readushort(f);
@@ -732,18 +764,18 @@ void readmaxp(FILE *f, ulong maxpofs)
 		maxcontours = readushort(f);
 		maxcpoints = readushort(f);
 		maxccontours = readushort(f);
-		printf("    numglyphs = %u\n", nglyphs);
-		printf("    maxpoints = %u\n", maxpoints);
-		printf("    maxcontours = %u\n", maxcontours);
-		printf("    maxcompositepoints = %u\n", maxcpoints);
-		printf("    maxcompositecontours = %u\n", maxccontours);
+		indent(1, "numglyphs = %u\n", nglyphs);
+		indent(1, "maxpoints = %u\n", maxpoints);
+		indent(1, "maxcontours = %u\n", maxcontours);
+		indent(1, "maxcompositepoints = %u\n", maxcpoints);
+		indent(1, "maxcompositecontours = %u\n", maxccontours);
 	}
 	else {
 		panic("unknown maxp version: 0x%08x\n", version);
 		nglyphs = 0;
 	}
 
-	printf("}\n\n");
+	indent(0, "}\n\n");
 
 	g_nglyphs = nglyphs;
 }
@@ -769,7 +801,8 @@ void readname(FILE *f, ulong nameofs)
 	count = readushort(f);
 	strofs = readushort(f);
 
-	printf("name\n{\n");
+	indent(0, "name\n");
+	indent(0, "{\n");
 
 	for (i = 0; i < count; i++)
 	{
@@ -815,20 +848,20 @@ void readname(FILE *f, ulong nameofs)
 
 			fseek(f, nameofs + strofs + offset, 0);
 			fread(string, 1, length, f);
-			printf("    %-12s = \"", s);
+			indent(1, "%-12s = \"", s);
 			if (pid == 3)
 				for (k = 1; k < length; k += 2)
 					putchar(string[k]);
 			else
 				fwrite(string, 1, length, stdout);
 
-			printf("\"\n");
+			puts("\"");
 
 			fseek(f, oldofs, 0);
 		}
 	}
 
-	printf("}\n\n");
+	indent(0, "}\n\n");
 }
 
 void readhheahmtx(FILE *f, ulong hheaofs, ulong hmtxofs, char hv)
@@ -855,31 +888,33 @@ void readhheahmtx(FILE *f, ulong hheaofs, ulong hmtxofs, char hv)
 	short metricfmt; metricfmt = readshort(f);
 	ushort nmetrics = readushort(f);
 
-	printf("%chea\n{\n", hv);
-	printf("    ascender = %d\n", ascender);
-	printf("    descender = %d\n", descender);
-	printf("    linegap = %d\n", linegap);
-	printf("    caret = %d / %d + %d\n", caretrise, caretrun, caretoffset);
-	printf("}\n\n");
+	indent(0, "%chea\n", hv);
+	indent(0, "{\n");
+	indent(0, "    ascender = %d\n", ascender);
+	indent(0, "    descender = %d\n", descender);
+	indent(0, "    linegap = %d\n", linegap);
+	indent(0, "    caret = %d / %d + %d\n", caretrise, caretrun, caretoffset);
+	indent(0, "}\n\n");
 
 	fseek(f, hmtxofs, 0);
 
-	printf("%cmtx\n{\n", hv);
+	indent(0, "%cmtx\n", hv);
+	indent(0, "{\n");
 
 	for (i = 0; i < nmetrics; i++)
 	{
 		ushort advw = readushort(f);
 		short lsb = readshort(f);
-		printf("  %5u %6d\n", advw, lsb);
+		indent(1, "%5u %6d\n", advw, lsb);
 	}
 
 	for ( ; i < g_nglyphs; i++)
 	{
 		short lsb = readshort(f);
-		printf("  %6d\n", lsb);
+		indent(1, "%6d\n", lsb);
 	}
 
-	printf("}\n\n");
+	indent(0, "}\n\n");
 }
 
 void readpost(FILE *f, ulong postofs)
@@ -898,28 +933,29 @@ void readpost(FILE *f, ulong postofs)
 	readulong(f); // minMemType1
 	readulong(f); // maxMemType1
 
-	printf("post\n{\n");
+	indent(0, "post\n");
+	indent(0, "{\n");
 
-	printf("    italic angle = %g\n", italicangle / 65536.0);
-	printf("    underline position = %d\n", underlineposition);
-	printf("    underline thickness = %d\n", underlinethickness);
-	printf("    fixed pitch = %d\n", isfixedpitch);
+	indent(1, "italic angle = %g\n", italicangle / 65536.0);
+	indent(1, "underline position = %d\n", underlineposition);
+	indent(1, "underline thickness = %d\n", underlinethickness);
+	indent(1, "fixed pitch = %d\n", isfixedpitch);
 
 	switch (format)
 	{
 	case 1 << 16:
-		printf("    format 1 (standard macintosh ordering)\n");
+		indent(1, "format 1 (standard macintosh ordering)\n");
 		break;
 	case 2 << 16:
-		printf("    format 2\n");
-		printf("    {\n");
+		indent(1, "format 2\n");
+		indent(1, "{\n");
 		ushort numberofglyphs = readushort(f);
 		int numberofnewglyphs = 0;
-		printf("        number of glyphs = %d\n", numberofglyphs);
+		indent(2, "number of glyphs = %d\n", numberofglyphs);
 		for (i = 0; i < numberofglyphs; i++)
 		{
 			int nameidx = readushort(f);
-			printf("        glyph %d = name %d\n", i, nameidx);
+			indent(2, "glyph %d = name %d\n", i, nameidx);
 			if (nameidx > 258)
 			{
 				nameidx -= 258;
@@ -930,18 +966,18 @@ void readpost(FILE *f, ulong postofs)
 		for (i = 0; i < numberofnewglyphs; i++)
 		{
 			int n = getc(f);
-			printf("        name %d = (", i + 258);
+			indent(2, "name %d = (", i + 258);
 			while (n--)
 				putchar(getc(f));
-			printf(")\n");
+			indent(0, ")\n");
 		}
-		printf("    }\n");
+		indent(1, "}\n");
 		break;
 	default:
-		printf("    format %g\n", format / 65536.0);
+		indent(1, "format %g\n", format / 65536.0);
 	}
 
-	printf("}\n\n");
+	indent(0, "}\n\n");
 }
 
 /*
@@ -1058,12 +1094,12 @@ void readoneglyf(FILE *f, ulong ofs, ulong len)
 		}
 
 		int k = 0;
-		if (npts) printf("\tcontour {\n");
+		if (npts) indent(1, "contour {\n");
 		for (i = 0; i < npts; i++) {
-			printf("\t  %6d %6d %s\n", xs[i], ys[i], flags[i] & 1 ? "on" : "off");
+			indent(2, "%6d %6d %s\n", xs[i], ys[i], flags[i] & 1 ? "on" : "off");
 			if (i == endpts[k]) {
-				printf("\t}\n");
-				if (k < ncont - 1) printf("\tcontour {\n");
+				indent(1, "}\n");
+				if (k < ncont - 1) indent(1, "contour {\n");
 				k ++;
 			}
 		}
@@ -1074,16 +1110,16 @@ void readoneglyf(FILE *f, ulong ofs, ulong len)
 	{
 
 #define ARG_1_AND_2_ARE_WORDS           (1 << 0)
-#define ARGS_ARE_XY_VALUES                      (1 << 1)
-#define ROUND_XY_TO_GRID                        (1 << 2)
-#define WE_HAVE_A_SCALE                         (1 << 3)
-#define RESERVED                                        (1 << 4)
-#define MORE_COMPONENTS                         (1 << 5)
+#define ARGS_ARE_XY_VALUES              (1 << 1)
+#define ROUND_XY_TO_GRID                (1 << 2)
+#define WE_HAVE_A_SCALE                 (1 << 3)
+#define RESERVED                        (1 << 4)
+#define MORE_COMPONENTS                 (1 << 5)
 #define WE_HAVE_AN_X_AND_Y_SCALE        (1 << 6)
 #define WE_HAVE_A_TWO_BY_TWO            (1 << 7)
 #define WE_HAVE_INSTRUCTIONS            (1 << 8)
-#define USE_MY_METRICS                          (1 << 9)
-#define OVERLAP_COMPOUND                        (1 << 10)
+#define USE_MY_METRICS                  (1 << 9)
+#define OVERLAP_COMPOUND                (1 << 10)
 #define SCALED_COMPONENT_OFFSET         (1 << 11)
 #define UNSCALED_COMPONENT_OFFSET       (1 << 12)
 
@@ -1125,7 +1161,7 @@ void readoneglyf(FILE *f, ulong ofs, ulong len)
 				yy = readshort(f);
 			}
 
-			printf("\tsubr %5u %6d %6d (%s) [%0.2f %0.2f %0.2f %0.2f]\n", gid,
+			indent(1, "subr %5u %6d %6d (%s) [%0.2f %0.2f %0.2f %0.2f]\n", gid,
 					arg1, arg2, flags & ARGS_ARE_XY_VALUES ? "xy" : "pt",
 					xx / 16384.0, yx / 16384.0, xy / 16384.0, yy / 16384.0);
 		}
@@ -1139,18 +1175,20 @@ void readglyf(FILE *f, ulong glyfofs, ulong locaofs)
 	ulong len;
 	int i;
 
-	printf("glyf\n{\n");
+	indent(0, "glyf\n");
+	indent(0, "{\n");
 
 	for (i = 0; i < g_nglyphs; i++)
 	{
 		ofs = readglyfofs(f, locaofs, i);
 		len = readglyflen(f, locaofs, i);
-		printf("    glyf %d\n    {\n", i);
+		indent(1, "glyf %d\n", i);
+		indent(1, "{\n", i);
 		readoneglyf(f, glyfofs + ofs, len);
-		printf("    }\n\n");
+		indent(1, "}\n\n");
 	}
 
-	printf("}\n\n");
+	indent(0, "}\n\n");
 }
 
 void dumptable(FILE *f, ulong ofs, ulong len, char *name)
@@ -1180,7 +1218,7 @@ void dumptable(FILE *f, ulong ofs, ulong len, char *name)
 }
 
 /*
- * Main
+ * Main truetype
  */
 
 void readfontdir(FILE *f)
@@ -1211,17 +1249,18 @@ void readfontdir(FILE *f)
 	ulong offset;
 	ulong length;
 
-	printf("truetype\n{\n");
+	indent(0, "truetype\n");
+	indent(0, "{\n");
 
 	version = readulong(f);
 	if (version == 0x00010000)
-		printf("    version = 0x00010000\n");
+		indent(1, "version = 0x00010000\n");
 	else if (version == TAG('t','r','u','e'))
-		printf("    version = 'true'\n");
+		indent(1, "version = 'true'\n");
 	else if (version == TAG('O','T','T','O'))
-		printf("    version = 'OTTO'\n");
+		indent(1, "version = 'OTTO'\n");
 	else if (version == TAG('t','y','p','1'))
-		printf("    version = 'typ1'\n");
+		indent(1, "version = 'typ1'\n");
 	else
 		panic("unknown version: 0x%08x\n", version);
 
@@ -1238,7 +1277,7 @@ void readfontdir(FILE *f)
 		offset = readulong(f);
 		length = readulong(f);
 
-		printf("    table '%c%c%c%c' %lu %lu\n",
+		indent(1, "table '%c%c%c%c' %lu %lu\n",
 				(byte)(tag >> 24), (byte)(tag >> 16), (byte)(tag >> 8), (byte)tag,
 				offset, length);
 
@@ -1281,7 +1320,7 @@ void readfontdir(FILE *f)
 		}
 	}
 
-	printf("}\n\n");
+	indent(0, "}\n\n");
 
 	if (headofs) readhead(f, headofs);
 	if (nameofs) readname(f, nameofs);
@@ -1307,6 +1346,50 @@ void readfontdir(FILE *f)
 		readglyf(f, glyfofs, locaofs);
 }
 
+/*
+ * Main truetype collection
+ */
+void readcollection(FILE *f)
+{
+	ulong tag;
+	ulong version;
+	ulong fonts;
+	ulong length;
+	ulong offset;
+	int i;
+	long save;
+
+	indent(0, "truetype collection\n");
+	indent(0, "{\n");
+
+	tag = readulong(f);
+	version = readulong(f);
+	fonts = readulong(f);
+
+	indent(1, "version = 0x%08x\n", version);
+	indent(1, "fonts = 0x%08x\n", fonts);
+
+	save = ftell(f);
+
+	for (i = 0; i < fonts; i++) {
+		offset = readulong(f);
+		indent(1, "offsetTable[% 3d]: 0x%08x\n", i, offset);
+	}
+	puts("");
+
+	fseek(f, save, 0);
+	for (i = 0; i < fonts; i++) {
+		fseek(f, 12 + i * 4, 0);
+		offset = readulong(f);
+		fseek(f, offset, 0);
+		g_indent = 1;
+		readfontdir(f);
+		puts("");
+	}
+
+	puts("}");
+}
+
 int main(int argc, char **argv)
 {
 	if (argc < 2)
@@ -1316,7 +1399,14 @@ int main(int argc, char **argv)
 	if (!f)
 		panic("fopen failed");
 
-	readfontdir(f);
+	ulong tag = readulong(f);
+	fseek(f, 0, 0);
+	if (tag == 0x74746366)
+		readcollection(f);
+	else {
+		g_indent = 0;
+		readfontdir(f);
+	}
 
 	fclose(f);
 
