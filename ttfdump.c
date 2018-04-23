@@ -19,6 +19,7 @@
 
 static int g_nglyphs;
 static int g_locafmt;
+static int g_indent;
 
 void panic(char *fmt, ...)
 {
@@ -70,7 +71,7 @@ static void indent(int level, const char *fmt, ...)
 	int i;
 
 	va_start(args, fmt);
-	for (i = 0; i < level; i++)
+	for (i = 0; i < g_indent + level; i++)
 		putchar('\t');
 	vprintf(fmt, args);
 	va_end(args);
@@ -84,6 +85,8 @@ static void indentdump(int level, int offset, int max, const char *fmt, ...)
 
 	if (offset % max)
 		level = 0;
+	if (level > 0)
+		level += g_indent;
 	for (i = 0; i < level; i++)
 		putchar('\t');
 	if (fmt) {
@@ -1215,7 +1218,7 @@ void dumptable(FILE *f, ulong ofs, ulong len, char *name)
 }
 
 /*
- * Main
+ * Main truetype
  */
 
 void readfontdir(FILE *f)
@@ -1343,6 +1346,50 @@ void readfontdir(FILE *f)
 		readglyf(f, glyfofs, locaofs);
 }
 
+/*
+ * Main truetype collection
+ */
+void readcollection(FILE *f)
+{
+	ulong tag;
+	ulong version;
+	ulong fonts;
+	ulong length;
+	ulong offset;
+	int i;
+	long save;
+
+	indent(0, "truetype collection\n");
+	indent(0, "{\n");
+
+	tag = readulong(f);
+	version = readulong(f);
+	fonts = readulong(f);
+
+	indent(1, "version = 0x%08x\n", version);
+	indent(1, "fonts = 0x%08x\n", fonts);
+
+	save = ftell(f);
+
+	for (i = 0; i < fonts; i++) {
+		offset = readulong(f);
+		indent(1, "offsetTable[% 3d]: 0x%08x\n", i, offset);
+	}
+	puts("");
+
+	fseek(f, save, 0);
+	for (i = 0; i < fonts; i++) {
+		fseek(f, 12 + i * 4, 0);
+		offset = readulong(f);
+		fseek(f, offset, 0);
+		g_indent = 1;
+		readfontdir(f);
+		puts("");
+	}
+
+	puts("}");
+}
+
 int main(int argc, char **argv)
 {
 	if (argc < 2)
@@ -1352,7 +1399,14 @@ int main(int argc, char **argv)
 	if (!f)
 		panic("fopen failed");
 
-	readfontdir(f);
+	ulong tag = readulong(f);
+	fseek(f, 0, 0);
+	if (tag == 0x74746366)
+		readcollection(f);
+	else {
+		g_indent = 0;
+		readfontdir(f);
+	}
 
 	fclose(f);
 
